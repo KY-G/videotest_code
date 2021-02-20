@@ -1,2 +1,2 @@
 # videotest_code
-用于瞳孔直径测量的[ython工程
+用于瞳孔直径测量的ython工程
