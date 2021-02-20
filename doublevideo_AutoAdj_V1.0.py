@@ -18,9 +18,21 @@
     解决眨眼导致阈值过高问题
 加入滑动调节曝光量，不滑动时曝光量只在初始化时设置，滑动后，重新设置阈值。
 。。。。。。。。。。。。。。。。。。。2020.02.04。。。。。。。。。。。。。。。。。。。。
+修改程序存在的BUG
+    在阈值自动调节时有部分条件语句未起到该有的作用，原因是窗口名与条件语句中窗口名不一致
+    修改后程序仍然正常，但不知道与原来相比效果如何，待测试。
+将各参数滑动条加入到瞳孔直径读取的窗口中。
+
+。。。。。。。。。。。。。。。。。。。2020.02.19。。。。。。。。。。。。。。。。。。。。
+优化灰度阈值自动调整程序
+    当曝光度改变后，阈值自动调整略有偏差，加入对比度纠偏
+
+。。。。。。。。。。。。。。。。。。。2020.02.20。。。。。。。。。。。。。。。。。。。。
 尚存问题：
 当处理500万像素的图片时，仍旧会卡顿（现在处理200万像素的图片）
 按 s 结束一个进程运行，无法同时结束两个
+电脑关机后，再次重启，摄像头需要拔插一次，否则无法调节曝光
+    已知需要进行一步将默认的自动曝光改为手动曝光，但仍然不知道如何修改。
 
 '''
 import numpy as np
@@ -123,6 +135,10 @@ def video_read(id):
             Adj_gray = 0
             cv2.setTrackbarPos('Adj_gray', 'Color Track Bar' + str(id), Adj_gray)
 
+            adj_contrast = 9
+            adj_contrast_start = 0
+            cv2.setTrackbarPos('Adj_contrast', 'Color Track Bar' + str(id), adj_contrast)
+
         q.put(cap.read()[1])  # 刚刚放进去一张图片
         if q.qsize() > 1:
             q.get()
@@ -142,7 +158,7 @@ def video_read(id):
             time.sleep(0.020)
 
         frame = cv2.flip(frame, 1)  # 若无本语句，摄像头非镜像
-        cv2.imshow('video' + str(id), imutils.resize(frame, width=640, height=480))
+        cv2.imshow('Video Window' + str(id), imutils.resize(frame, width=640, height=480))
 
         con = cv2.getTrackbarPos("Adj_contrast", 'Color Track Bar' + str(id)) * 0.1
         bri = cv2.getTrackbarPos("Adj_brightness", 'Color Track Bar' + str(id)) * 0.1
@@ -183,6 +199,7 @@ def video_read(id):
         # print("像素个数：%s" % closing.size)  # 像素个数
         # print("平均值：%s" % (a / (closing.size)))
         if (pixel_avg <= 248) and (adj_over == 0):
+            m = 0
             adj_over = 0
             Adj_gray = 0
             cv2.setTrackbarPos('Adj_gray', 'Color Track Bar'+ str(id), Adj_gray)
@@ -191,17 +208,17 @@ def video_read(id):
             if (Adj_exposure <= 5):
                 adj_over = 0
                 Adj_gray = Adj_gray + 5
-                cv2.setTrackbarPos('Adj_gray', 'Color Track Bar'+ str(id), Adj_gray)
-            elif(Adj_exposure > 5):
+                cv2.setTrackbarPos('Adj_gray', 'Color Track Bar' + str(id), Adj_gray)
+            elif (Adj_exposure > 5):
                 adj_over = 0
                 Adj_gray = Adj_gray + 3
                 cv2.setTrackbarPos('Adj_gray', 'Color Track Bar' + str(id), Adj_gray)
             # pixel_avg = (np.sum(np.array(closing))) / (closing.size)
-        elif (248 < pixel_avg < 254) and (len(contours) > 24) and (adj_over == 0):
+        elif (248 < pixel_avg < 254) and (len(contours) > 40) and (adj_over == 0):
             adj_over = 0
             Adj_gray = 0
             cv2.setTrackbarPos('Adj_gray', 'Color Track Bar' + str(id), Adj_gray)
-        elif (248 < pixel_avg < 254) and 6 <= (len(contours) <= 24) and (adj_over == 0):
+        elif (248 < pixel_avg < 254) and 6 <= (len(contours) <= 40) and (adj_over == 0):
             if (Adj_exposure <= 5):
                 adj_over = 0
                 Adj_gray = Adj_gray + 2
@@ -215,10 +232,15 @@ def video_read(id):
             Adj_gray = Adj_gray + 5
             adj_contrast_start = 1
             cv2.setTrackbarPos('Adj_gray', 'Color Track Bar' + str(id), Adj_gray)
-            print("瞳孔调试完成标志：%d,%d" % (adj_over, adj_contrast_start))
+            print("瞳孔灰度阈值调试完成标志：%d,%d" % (adj_over, adj_contrast_start))
         #print("瞳孔调试完成标志：%d,%d"%(adj_over, adj_contrast_start))
+        elif(adj_over == 1) and (adj_contrast_start == 1):
+            adj_contrast = adj_contrast - 1
+            adj_contrast_start = 0
+            cv2.setTrackbarPos('Adj_contrast', 'Color Track Bar' + str(id), adj_contrast)
+            print("瞳孔对比度调试完成标志：%d,%d" % (adj_over, adj_contrast_start))
 
-        if (adj_over == 1) and (len(contours) < 24) :
+        if (adj_over == 1) and (adj_contrast_start == 0) and(len(contours) < 24) :
             for i in range(0, len(contours)):
                 cnt = contours[i]
                 x, y, w, h = cv2.boundingRect(cnt)
